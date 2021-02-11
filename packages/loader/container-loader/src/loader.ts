@@ -344,7 +344,7 @@ export class Loader extends TypedEventEmitter<ILoaderEvents> implements ILoader 
     }
 
     private getKeyForContainerCache(request: IRequest, parsedUrl: IParsedUrl): string {
-        const key = parsedUrl.version
+        const key = parsedUrl.version !== undefined
             ? `${parsedUrl.id}@${parsedUrl.version}`
             : (request.headers?.[LoaderHeader.version] !== undefined
                 ? `${parsedUrl.id}@${request.headers[LoaderHeader.version]}`

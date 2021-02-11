@@ -205,7 +205,7 @@ export class Container extends EventEmitterWithErrorHandling<IContainerEvents> i
                 canReconnect,
             });
 
-        if (request.headers?.[LoaderHeader.reconnect]) {
+        if (request.headers?.[LoaderHeader.reconnect] !== undefined) {
             container.logger.sendErrorEvent({ eventName: "DeprecatedLoaderHeaderReconnect" });
         }
 
@@ -214,10 +214,10 @@ export class Container extends EventEmitterWithErrorHandling<IContainerEvents> i
                 const version = parseUrl(resolvedUrl.url)?.version ?? request.headers?.[LoaderHeader.version];
                 const pause = loader.services.options.pause === true || request.headers?.[LoaderHeader.pause];
 
-                if (request.headers?.[LoaderHeader.version]) {
+                if (request.headers?.[LoaderHeader.version] !== undefined) {
                     container.logger.sendErrorEvent({ eventName: "DeprecatedLoaderHeaderVersion" });
                 }
-                if (request.headers?.[LoaderHeader.pause]) {
+                if (request.headers?.[LoaderHeader.pause] !== undefined) {
                     container.logger.sendErrorEvent({ eventName: "DeprecatedLoaderHeaderPause" });
                 }
 
