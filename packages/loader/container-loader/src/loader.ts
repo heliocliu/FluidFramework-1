@@ -344,9 +344,11 @@ export class Loader extends TypedEventEmitter<ILoaderEvents> implements ILoader 
     }
 
     private getKeyForContainerCache(request: IRequest, parsedUrl: IParsedUrl): string {
-        const key = request.headers?.[LoaderHeader.version] !== undefined
-            ? `${parsedUrl.id}@${request.headers[LoaderHeader.version]}`
-            : parsedUrl.id;
+        const key = parsedUrl.version
+            ? `${parsedUrl.id}@${parsedUrl.version}`
+            : (request.headers?.[LoaderHeader.version] !== undefined
+                ? `${parsedUrl.id}@${request.headers[LoaderHeader.version]}`
+                : parsedUrl.id);
         return key;
     }
 
@@ -398,7 +400,9 @@ export class Loader extends TypedEventEmitter<ILoaderEvents> implements ILoader 
                     resolvedAsFluid);
         }
 
-        this.emit("containerLoaded", container, newContainer);
+        if (newContainer) {
+            this.emit("containerCreated", container);
+        }
 
         if (container.deltaManager.lastSequenceNumber <= fromSequenceNumber) {
             await new Promise<void>((resolve, reject) => {

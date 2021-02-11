@@ -205,10 +205,21 @@ export class Container extends EventEmitterWithErrorHandling<IContainerEvents> i
                 canReconnect,
             });
 
+        if (request.headers?.[LoaderHeader.reconnect]) {
+            container.logger.sendErrorEvent({ eventName: "DeprecatedLoaderHeaderReconnect" });
+        }
+
         return PerformanceEvent.timedExecAsync(container.logger, { eventName: "Load" }, async (event) => {
             return new Promise<Container>((res, rej) => {
-                const version = request.headers?.[LoaderHeader.version];
+                const version = parseUrl(resolvedUrl.url)?.version ?? request.headers?.[LoaderHeader.version];
                 const pause = loader.services.options.pause === true || request.headers?.[LoaderHeader.pause];
+
+                if (request.headers?.[LoaderHeader.version]) {
+                    container.logger.sendErrorEvent({ eventName: "DeprecatedLoaderHeaderVersion" });
+                }
+                if (request.headers?.[LoaderHeader.pause]) {
+                    container.logger.sendErrorEvent({ eventName: "DeprecatedLoaderHeaderPause" });
+                }
 
                 const onClosed = (err?: ICriticalContainerError) => {
                     // Depending where error happens, we can be attempting to connect to web socket
