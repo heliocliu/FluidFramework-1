@@ -15,6 +15,7 @@ import {
 import {
     IAudience,
     ICodeLoader,
+    IContainer,
     IContainerContext,
     IDeltaManager,
     ILoader,
@@ -63,6 +64,11 @@ export class ContainerContext implements IContainerContext {
         submitFn: (type: MessageType, contents: any, batch: boolean, appData: any) => number,
         submitSignalFn: (contents: any) => void,
         closeFn: (error?: ICriticalContainerError) => void,
+        loadContainerCopyFn: (
+            clientDetails?: IClientDetails,
+            fromSequenceNumber?: number,
+            summarizingClient?: boolean,
+            ) => Promise<IContainer>,
         version: string,
         previousRuntimeState: IRuntimeState,
         updateDirtyContainerState: (dirty: boolean) => void,
@@ -81,6 +87,7 @@ export class ContainerContext implements IContainerContext {
             submitFn,
             submitSignalFn,
             closeFn,
+            loadContainerCopyFn,
             version,
             previousRuntimeState,
             updateDirtyContainerState);
@@ -188,6 +195,11 @@ export class ContainerContext implements IContainerContext {
         public readonly submitFn: (type: MessageType, contents: any, batch: boolean, appData: any) => number,
         public readonly submitSignalFn: (contents: any) => void,
         public readonly closeFn: (error?: ICriticalContainerError) => void,
+        public readonly loadContainerCopyFn: (
+            clientDetails?: IClientDetails,
+            fromSequenceNumber?: number,
+            summarizingClient?: boolean,
+            ) => Promise<IContainer>,
         public readonly version: string,
         public readonly previousRuntimeState: IRuntimeState,
         public readonly updateDirtyContainerState: (dirty: boolean) => void,

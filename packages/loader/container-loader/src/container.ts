@@ -11,11 +11,11 @@ import {
 } from "@fluidframework/common-definitions";
 import { assert, performance } from "@fluidframework/common-utils";
 import {
-    IRequest,
-    IResponse,
-    IFluidRouter,
     IFluidCodeDetails,
     isFluidCodeDetails,
+    IFluidRouter,
+    IRequest,
+    IResponse,
 } from "@fluidframework/core-interfaces";
 import {
     IAudience,
@@ -31,10 +31,12 @@ import {
 } from "@fluidframework/container-definitions";
 import { CreateContainerError, DataCorruptionError } from "@fluidframework/container-utils";
 import {
+    DriverHeader,
     IDocumentService,
     IDocumentStorageService,
     IFluidResolvedUrl,
     IResolvedUrl,
+    IUrlResolver,
 } from "@fluidframework/driver-definitions";
 import {
     BlobCacheStorageService,
@@ -1803,6 +1805,21 @@ export class Container extends EventEmitterWithErrorHandling<IContainerEvents> i
         // are set. Global requests will still go directly to the loader
         const loader = new RelativeLoader(this.loader, () => this.containerUrl);
         const previousCodeDetails = this._context?.codeDetails;
+        const loadContainerCopyFn = async (
+            clientDetails?: IClientDetails,
+            fromSequenceNumber?: number,
+            summarizingClient?: boolean,
+        ) => {
+            // Load the container copy restricted: uncached and no reconnect
+            return this.loadContainerCopy(
+                this.loader,
+                this.loader.services.urlResolver,
+                this.containerUrl,
+                clientDetails,
+                fromSequenceNumber,
+                summarizingClient,
+            );
+        };
         this._context = await ContainerContext.createOrLoad(
             this,
             this.scope,
@@ -1817,6 +1834,7 @@ export class Container extends EventEmitterWithErrorHandling<IContainerEvents> i
             (type, contents, batch, metadata) => this.submitContainerMessage(type, contents, batch, metadata),
             (message) => this.submitSignal(message),
             (error?: ICriticalContainerError) => this.close(error),
+            loadContainerCopyFn,
             Container.version,
             previousRuntimeState,
             (dirty: boolean) => {
@@ -1845,5 +1863,64 @@ export class Container extends EventEmitterWithErrorHandling<IContainerEvents> i
     // raiseContainerWarning() is the right flow for most cases
     private logContainerError(warning: ContainerWarning) {
         this.logger.sendErrorEvent({ eventName: "ContainerWarning" }, warning);
+    }
+
+    private async loadContainerCopy(
+        // back-compat 0.35 stop passing loader post 0.35 support
+        loader: Loader,
+        urlResolver: IUrlResolver,
+        baseRequestUrl: string | undefined,
+        clientDetails?: IClientDetails,
+        fromSequenceNumber?: number,
+        summarizingClient?: boolean,
+    ): Promise<IContainer> {
+        if (baseRequestUrl === undefined) {
+            throw new Error("Base request is not provided");
+        }
+
+        const containerRequest: IRequest = {
+            headers: {
+                [DriverHeader.summarizingClient]: summarizingClient,
+            },
+            url: baseRequestUrl,
+        };
+
+        const resolvedAsFluid = await urlResolver.resolve(containerRequest);
+        ensureFluidResolvedUrl(resolvedAsFluid);
+
+        // Parse URL into data stores
+        const parsed = parseUrl(resolvedAsFluid.url);
+        if (parsed === undefined) {
+            return Promise.reject(new Error(`Invalid URL ${resolvedAsFluid.url}`));
+        }
+
+        // parseUrl's id is expected to be of format "tenantId/docId"
+        const [, docId] = parsed.id.split("/");
+
+        const container = await Container.load(
+            loader,
+            {
+                canReconnect: false,
+                clientDetailsOverride: clientDetails,
+                containerUrl: baseRequestUrl,
+                docId,
+                resolvedUrl: resolvedAsFluid,
+        });
+
+        const sequenceNumber = fromSequenceNumber ?? -1;
+        if (container.deltaManager.lastSequenceNumber <= sequenceNumber) {
+            await new Promise<void>((resolve, reject) => {
+                function opHandler(message: ISequencedDocumentMessage) {
+                    if (message.sequenceNumber > sequenceNumber) {
+                        resolve();
+                        container.removeListener("op", opHandler);
+                    }
+                }
+
+                container.on("op", opHandler);
+            });
+        }
+
+        return container;
     }
 }

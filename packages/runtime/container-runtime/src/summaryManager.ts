@@ -13,14 +13,19 @@ import {
     IPromiseTimerResult,
 } from "@fluidframework/common-utils";
 import { ChildLogger, PerformanceEvent } from "@fluidframework/telemetry-utils";
-import { IFluidObject, IRequest } from "@fluidframework/core-interfaces";
+import { IFluidObject, IRequest, IResponse } from "@fluidframework/core-interfaces";
 import {
     IContainerContext,
     LoaderHeader,
 } from "@fluidframework/container-definitions";
 import { ISequencedClient } from "@fluidframework/protocol-definitions";
 import { DriverHeader } from "@fluidframework/driver-definitions";
-import { ISummarizer, Summarizer, createSummarizingWarning, ISummarizingWarning } from "./summarizer";
+import {
+    createSummarizingWarning,
+    ISummarizer,
+    ISummarizingWarning,
+    Summarizer,
+} from "./summarizer";
 
 export const summarizerClientType = "summarizer";
 
@@ -418,25 +423,36 @@ export class SummaryManager extends EventEmitter implements IDisposable {
             return this.nextSummarizerP;
         }
 
-        const loader = this.context.loader;
-
+        let response: IResponse;
+        const headers = {
+            [LoaderHeader.cache]: false,
+            [LoaderHeader.clientDetails]: {
+                capabilities: { interactive: false },
+                type: summarizerClientType,
+            },
+            [DriverHeader.summarizingClient]: true,
+            [LoaderHeader.reconnect]: false,
+            [LoaderHeader.sequenceNumber]: this.context.deltaManager.lastSequenceNumber,
+            [LoaderHeader.executionContext]: this.enableWorker ? "worker" : undefined,
+        };
         // TODO eventually we may wish to spawn an execution context from which to run this
         const request: IRequest = {
-            headers: {
-                [LoaderHeader.cache]: false,
-                [LoaderHeader.clientDetails]: {
-                    capabilities: { interactive: false },
-                    type: summarizerClientType,
-                },
-                [DriverHeader.summarizingClient]: true,
-                [LoaderHeader.reconnect]: false,
-                [LoaderHeader.sequenceNumber]: this.context.deltaManager.lastSequenceNumber,
-                [LoaderHeader.executionContext]: this.enableWorker ? "worker" : undefined,
-            },
+            headers,
             url: "/_summarizer",
         };
-
-        const response = await loader.request(request);
+        // back-compat 0.35: this function is added in 0.36, but the original path
+        // needs to be preserved until 0.35 is no longer supported at this layer
+        if (!this.context.loadContainerCopyFn) {
+            const loader = this.context.loader;
+            response = await loader.request(request);
+        } else {
+            const containerCopy = await this.context.loadContainerCopyFn(
+                headers[LoaderHeader.clientDetails],
+                headers[LoaderHeader.sequenceNumber],
+                true /* summarizingClient */,
+            );
+            response = await containerCopy.request(request);
+        }
 
         if (response.status !== 200
             || (response.mimeType !== "fluid/object" && response.mimeType !== "fluid/component")) {

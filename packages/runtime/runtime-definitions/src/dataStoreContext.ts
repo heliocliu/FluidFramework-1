@@ -14,6 +14,7 @@ import {
 } from "@fluidframework/core-interfaces";
 import {
     IAudience,
+    IContainer,
     IDeltaManager,
     ContainerWarning,
     ILoader,
@@ -266,6 +267,15 @@ IEventProvider<IFluidDataStoreContextEvents>, Partial<IProvideFluidDataStoreRegi
     readonly attachState: AttachState;
 
     readonly containerRuntime: IContainerRuntimeBase;
+
+    /**
+     * Load a restricted copy of the hosting container
+     */
+    readonly loadContainerCopyFn: (
+        clientDetails?: IClientDetails,
+        fromSequenceNumber?: number,
+        summarizingClient?: boolean,
+    ) => Promise<IContainer>,
 
     /**
      * @deprecated 0.16 Issue #1635, #3631

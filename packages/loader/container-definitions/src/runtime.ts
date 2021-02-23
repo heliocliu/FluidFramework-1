@@ -26,7 +26,7 @@ import {
 import { IAudience } from "./audience";
 import { IDeltaManager } from "./deltas";
 import { ICriticalContainerError, ContainerWarning } from "./error";
-import { ILoader, ILoaderOptions } from "./loader";
+import { IContainer, ILoader, ILoaderOptions } from "./loader";
 
 // Represents the attachment state of the entity.
 export enum AttachState {
@@ -120,6 +120,11 @@ export interface IContainerContext extends IDisposable {
     readonly submitFn: (type: MessageType, contents: any, batch: boolean, appData?: any) => number;
     readonly submitSignalFn: (contents: any) => void;
     readonly closeFn: (error?: ICriticalContainerError) => void;
+    readonly loadContainerCopyFn: (
+        clientDetails?: IClientDetails,
+        fromSequenceNumber?: number,
+        summarizingClient?: boolean,
+        ) => Promise<IContainer>,
     readonly deltaManager: IDeltaManager<ISequencedDocumentMessage, IDocumentMessage>;
     readonly quorum: IQuorum;
     readonly audience: IAudience | undefined;

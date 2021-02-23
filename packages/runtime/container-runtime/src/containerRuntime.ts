@@ -18,6 +18,7 @@ import {
 import {
     IAudience,
     IFluidTokenProvider,
+    IContainer,
     IContainerContext,
     IDeltaManager,
     IDeltaSender,
@@ -582,6 +583,14 @@ export class ContainerRuntime extends TypedEventEmitter<IContainerRuntimeEvents>
 
     public get closeFn(): (error?: ICriticalContainerError) => void {
         return this.context.closeFn;
+    }
+
+    public get loadContainerCopyFn(): (
+        clientDetails?: IClientDetails,
+        fromSequenceNumber?: number,
+        summarizingClient?: boolean,
+    ) => Promise<IContainer> {
+        return this.context.loadContainerCopyFn;
     }
 
     public get loader(): ILoader {
