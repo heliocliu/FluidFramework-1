@@ -18,12 +18,11 @@ import {
     ICodeLoader,
     IContainer,
     ILoader,
-    ILoaderEvents,
     ILoaderOptions,
     IProxyLoaderFactory,
     LoaderHeader,
 } from "@fluidframework/container-definitions";
-import { Deferred, performance, TypedEventEmitter } from "@fluidframework/common-utils";
+import { Deferred, performance } from "@fluidframework/common-utils";
 import { ChildLogger, DebugLogger, PerformanceEvent } from "@fluidframework/telemetry-utils";
 import {
     IDocumentServiceFactory,
@@ -229,7 +228,7 @@ export interface ILoaderServices {
 /**
  * Manages Fluid resource loading
  */
-export class Loader extends TypedEventEmitter<ILoaderEvents> implements ILoader {
+export class Loader extends EventEmitter implements ILoader {
     private readonly containers = new Map<string, Promise<Container>>();
     public readonly services: ILoaderServices;
     private readonly logger: ITelemetryLogger;
@@ -386,13 +385,11 @@ export class Loader extends TypedEventEmitter<ILoaderEvents> implements ILoader 
         const { canCache, fromSequenceNumber } = this.parseHeader(parsed, request);
 
         let container: Container;
-        let newContainer = true;
         if (canCache) {
             const key = this.getKeyForContainerCache(request, parsed);
             const maybeContainer = await this.containers.get(key);
             if (maybeContainer !== undefined) {
                 container = maybeContainer;
-                newContainer = false;
             } else {
                 const containerP =
                     this.loadContainer(
@@ -408,10 +405,6 @@ export class Loader extends TypedEventEmitter<ILoaderEvents> implements ILoader 
                     docId,
                     request,
                     resolvedAsFluid);
-        }
-
-        if (newContainer) {
-            this.emit("containerCreated", container);
         }
 
         if (container.deltaManager.lastSequenceNumber <= fromSequenceNumber) {
@@ -471,16 +464,31 @@ export class Loader extends TypedEventEmitter<ILoaderEvents> implements ILoader 
         resolved: IFluidResolvedUrl,
     ): Promise<Container> {
         const docId = decodeURI(encodedDocId);
+        const canReconnect = !(this.services.options.reconnect === false ||
+            request.headers?.[LoaderHeader.reconnect] === false);
+        const version = parseUrl(resolved.url)?.version ?? request.headers?.[LoaderHeader.version];
+        const pause = this.services.options.pause === true || request.headers?.[LoaderHeader.pause];
+
+        if (request.headers?.[LoaderHeader.reconnect] !== undefined) {
+            this.logger.sendErrorEvent({ eventName: "DeprecatedLoaderHeaderReconnect" });
+        }
+        if (request.headers?.[LoaderHeader.version] !== undefined) {
+            this.logger.sendErrorEvent({ eventName: "DeprecatedLoaderHeaderVersion" });
+        }
+        if (request.headers?.[LoaderHeader.pause] !== undefined) {
+            this.logger.sendErrorEvent({ eventName: "DeprecatedLoaderHeaderPause" });
+        }
+
         return Container.load(
             this,
             {
-                canReconnect: request.headers?.[LoaderHeader.reconnect],
+                canReconnect,
                 clientDetailsOverride: request.headers?.[LoaderHeader.clientDetails],
                 containerUrl: request.url,
                 docId,
                 resolvedUrl: resolved,
-                version: request.headers?.[LoaderHeader.version],
-                pause: request.headers?.[LoaderHeader.pause],
+                version,
+                pause,
             },
         );
     }

@@ -181,13 +181,6 @@ export interface IContainer extends IEventProvider<IContainerEvents>, IFluidRout
 }
 
 /**
- * Events emitted by the Loader "upwards" to the Host
- */
-export interface ILoaderEvents extends IEvent {
-    (event: "containerCreated", listener: (container: IContainer) => void): void;
-}
-
-/**
  * The Host's view of the Loader, used for loading Containers
  */
 export interface ILoader extends IFluidRouter {
