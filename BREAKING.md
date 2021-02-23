@@ -1,4 +1,4 @@
-## 0.35 Breaking changes
+## 0.36 Breaking changes
 - [Changes-to-Loader-request-headers-and-usage]
 
 ### Changes to Loader request headers and usage
@@ -7,6 +7,37 @@ Some Loader headers are being deprecated.
 `cache`, `pause`, and `reconnect` should now be specified as part of the `ILoaderOptions` when creating the Loader.  These options are static for a `Loader` instance.  Callers that previously specified these options through the `ILoaderHeader` should instead create a new `Loader` instance with the desired options.
 
 `version` should now be specified as part of the request url when calling `Loader.request(...)` or `Loader.resolve(...)` (this method was already supported previously).
+
+## 0.35 Breaking changes
+- [Removed some api implementations from odsp driver](#Removed-some-api-implemenations-from-odsp-driver)
+- [get-tinylicious-container and get-session-storage-container moved](#get-tinylicious-container-and-get-session-storage-container-moved)
+- [Moved parseAuthErrorClaims from @fluidframework/odsp-driver to @fluidframework/odsp-doclib-utils](#Moved-parseAuthErrorClaims-from-@fluidframework/odsp-driver-to-@fluidframework/odsp-doclib-utils)
+- [Refactored token fetcher types in odsp-driver](#refactored-token-fetcher-types-in-odsp-driver)
+- [DeltaManager `readonly` and `readOnlyPermissions` properties deprecated](#DeltaManager-`readonly`-and-`readOnlyPermissions`-properties-deprecated)
+- [DirtyDocument events and property](#DirtyDocument-events-and-property)
+
+### Removed-some-api-implementations-from-odsp-driver
+Removed `authorizedFetchWithRetry`, `AuthorizedRequestTokenPolicy`, `AuthorizedFetchProps`, `asyncWithCache`, `asyncWithRetry`,
+`fetchWithRetry` implementation from odspdriver.
+
+### get-tinylicious-container and get-session-storage-container moved
+The functionality from the packages `@fluidframework/get-tinylicious-container` and `@fluidframework/get-session-storage-container` has been moved to the package `@fluid-experimental/get-container`.
+
+### Moved parseAuthErrorClaims from @fluidframework/odsp-driver to @fluidframework/odsp-doclib-utils
+Moved `parseAuthErrorClaims` from `@fluidframework/odsp-driver` to `@fluidframework/odsp-doclib-utils`
+
+### Refactored token fetcher types in odsp-driver
+Streamlined interfaces and types used to facilitate access tokens needed by odsp-driver to call ODSP implementation of Fluid services.
+Added support for passing siteUrl when fetching token that is used to establish co-authoring session for Fluid content stored in ODSP file which is hosted in external tenant. This token is used by ODSP ordering service implementation (aka ODSP Push service).
+
+### DeltaManager `readonly` and `readOnlyPermissions` properties deprecated
+`DeltaManager.readonly`/`Container.readonly` and `DeltaManager.readOnlyPermissions`/`Container.readOnlyPermissions` have been deprecated. Please use `DeltaManager.readOnlyInfo`/`Container.readOnlyInfo` instead, which exposes the same information.
+
+### DirtyDocument events and property
+The following 3 names have been deprecated - please use new names:
+"dirtyDocument" event -> "dirty" event
+"savedDocument" event -> "saved" event
+isDocumentDirty property -> isDirty property
 
 ## 0.34 Breaking changes
 - [Aqueduct writeBlob() and BlobHandle implementation removed](#Aqueduct-writeBlob-and-BlobHandle-implementation-removed)
