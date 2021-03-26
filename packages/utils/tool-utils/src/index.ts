@@ -5,4 +5,5 @@
 
 export * from "./fluidToolRC";
 export * from "./odspTokenManager";
+export * from "./sanitizer";
 export * from "./snapshotNormalizer";

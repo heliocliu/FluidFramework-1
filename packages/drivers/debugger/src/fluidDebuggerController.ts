@@ -23,8 +23,8 @@ import {
     ReplayController,
     SnapshotStorage,
 } from "@fluidframework/replay-driver";
+import { Sanitizer } from "@fluidframework/tool-utils";
 import { IDebuggerController, IDebuggerUI } from "./fluidDebuggerUi";
-import { Sanitizer } from "./sanitizer";
 
 export type debuggerUIFactory = (controller: IDebuggerController) => IDebuggerUI | null;
 

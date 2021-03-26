@@ -32,7 +32,7 @@
     "@fluidframework/driver-utils": "^0.37.0",
     "@fluidframework/protocol-definitions": "^0.1022.0-0",
     "@fluidframework/replay-driver": "^0.37.0",
-    "jsonschema": "^1.2.6"
+    "@fluidframework/tool-utils": "^0.37.0"
   },
   "devDependencies": {
     "@fluidframework/build-common": "^0.20.0",

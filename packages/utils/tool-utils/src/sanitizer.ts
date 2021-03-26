@@ -284,6 +284,7 @@ export class Sanitizer {
 
     readonly replaceRandomTextFn = (match: string): string => {
         if (this.replacementMap.has(match)) {
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
             return this.replacementMap.get(match)!;
         }
 
@@ -303,7 +304,7 @@ export class Sanitizer {
 
         if (type === TextType.FluidObject) {
             if (this.replacementMap.has(input)) {
-                return this.replacementMap.get(input)!;
+                return this.replacementMap.get(input);
             }
 
             let replacement: string;
@@ -344,6 +345,7 @@ export class Sanitizer {
     // eslint-disable-next-line @typescript-eslint/ban-types
     replaceObject(input: object | null, excludedKeys: Set<string> = this.defaultExcludedKeys): object | null {
         // File might contain actual nulls
+        // eslint-disable-next-line no-null/no-null
         if (input === null || input === undefined) {
             return input;
         }
@@ -374,6 +376,8 @@ export class Sanitizer {
      * @param excludedKeys - object keys for which to skip replacement when not in fullScrub
      */
     replaceAny(input: any, excludedKeys: Set<string> = this.defaultExcludedKeys): any {
+        // File might contain actual nulls
+        // eslint-disable-next-line no-null/no-null
         if (input === null || input === undefined) {
             // eslint-disable-next-line @typescript-eslint/no-unsafe-return
             return input;
