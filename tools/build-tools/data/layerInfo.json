@@ -93,6 +93,8 @@
                 ],
                 "deps": [
                     "Base-Utils",
+                    "Driver",
+                    "Framework",
                     "Other-Utils"
                 ]
             },
