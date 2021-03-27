@@ -3,8 +3,7 @@
  * Licensed under the MIT License.
  */
 
-import { ReplayArgs } from "./replayArgs";
-import { ReplayTool } from "./replayMessages";
+import { ReplayArgs, ReplayTool } from "@fluidframework/tool-utils";
 
 const optionsArray = [
     "Location:",

@@ -31,7 +31,7 @@ import {
     IChannelSummarizeResult,
 } from "@fluidframework/runtime-definitions";
 import { TelemetryLogger } from "@fluidframework/telemetry-utils";
-import { getNormalizedSnapshot } from "@fluidframework/tool-utils";
+import { getNormalizedSnapshot } from "./snapshotNormalizer";
 
 /**
  * Helper function that normalizes the snapshot trees in the given file snapshot.
@@ -186,14 +186,15 @@ function mixinDataStoreWithAnyChannel(
  * URL Resolver object
  */
 class ContainerUrlResolver implements IUrlResolver {
-    constructor(private readonly cache?: Map<string, IResolvedUrl>) {
+    constructor(private readonly cache: Map<string, IResolvedUrl>) {
     }
 
     public async resolve(request: IRequest): Promise<IResolvedUrl> {
         if (!this.cache.has(request.url)) {
             return Promise.reject(new Error(`ContainerUrlResolver can't resolve ${request}`));
         }
-        return this.cache.get(request.url);
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        return this.cache.get(request.url)!;
     }
 
     public async getAbsoluteUrl(
@@ -264,7 +265,8 @@ export async function loadContainer(
     });
     const container: Container = await loader.resolve({ url: resolved.url });
 
-    assert(container.existing, "Container does not exist!"); // ReplayFileDeltaConnection.create() guarantees that
+    // ReplayFileDeltaConnection.create() guarantees that
+    assert(container.existing === true, "Container does not exist!");
 
     return container;
 }

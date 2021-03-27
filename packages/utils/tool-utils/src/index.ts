@@ -5,5 +5,7 @@
 
 export * from "./fluidToolRC";
 export * from "./odspTokenManager";
+export * from "./replayArgs";
+export * from "./replayMessages";
 export * from "./sanitizer";
 export * from "./snapshotNormalizer";

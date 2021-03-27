@@ -30,8 +30,8 @@ import {
     FileSnapshotReader,
     IFileSnapshot,
 } from "@fluidframework/replay-driver";
-import { compareWithReferenceSnapshot, getNormalizedFileSnapshot, loadContainer } from "./helpers";
 import { ReplayArgs } from "./replayArgs";
+import { compareWithReferenceSnapshot, getNormalizedFileSnapshot, loadContainer } from "./replayHelpers";
 
 // "worker_threads" does not resolve without --experimental-worker flag on command line
 let threads = { isMainThread: true };
@@ -65,7 +65,7 @@ function expandTreeForReadability(tree: ITree): ITree {
  * Helper class to container information about particular snapshot
  */
 class ContainerContent {
-    public snapshot?: IFileSnapshot;
+    public _snapshot?: IFileSnapshot;
 
     private readonly _normalizedSnapshot: Lazy<IFileSnapshot>;
     private readonly _snapshotAsString: Lazy<string>;
@@ -93,6 +93,14 @@ class ContainerContent {
             }
             return JSON.stringify(snapshotExpanded, undefined, 2);
         });
+    }
+
+    get snapshot(): IFileSnapshot {
+        assert(this._snapshot !== undefined, "should be set before getting");
+        return this._snapshot;
+    }
+    set snapshot(snapshot: IFileSnapshot) {
+        this._snapshot = snapshot;
     }
 
     // Returns a normalized version of the file snapshot. This will be used when comparing snapshots.
@@ -146,19 +154,34 @@ class Logger implements ITelemetryBaseLogger {
  * Helper class holding container and providing load / snapshot capabilities
  */
 class Document {
-    private container: Container;
-    private replayer: Replayer;
+    private _container: Container | undefined;
+    private _replayer: Replayer | undefined;
     private documentSeqNumber = 0;
     private from = -1;
     private snapshotFileName: string = "";
-    private docLogger: TelemetryLogger;
-    private originalSummarySeqs: number[];
+    private _docLogger: TelemetryLogger | undefined;
+    private readonly originalSummarySeqs: number[] = [];
 
     public constructor(
         protected readonly args: ReplayArgs,
         public readonly storage: ISnapshotWriterStorage,
         public readonly containerDescription: string,
         private readonly throwOnEvents: boolean) {
+    }
+
+    private get container(): Container {
+        assert(this._container !== undefined, "should be defined");
+        return this._container;
+    }
+
+    private get replayer(): Replayer {
+        assert(this._replayer !== undefined, "should be defined");
+        return this._replayer;
+    }
+
+    private get docLogger(): TelemetryLogger {
+        assert(this._docLogger !== undefined, "should be defined");
+        return this._docLogger;
     }
 
     public get currentOp() {
@@ -194,15 +217,14 @@ class Document {
             deltaStorageService,
             deltaConnection);
 
-        this.docLogger = ChildLogger.create(new Logger(this.containerDescription, errorHandler, this.throwOnEvents));
-        this.container = await loadContainer(
+        this._docLogger = ChildLogger.create(new Logger(this.containerDescription, errorHandler, this.throwOnEvents));
+        this._container = await loadContainer(
             documentServiceFactory,
             FileStorageDocumentName,
             this.docLogger);
 
         this.from = this.container.deltaManager.lastSequenceNumber;
-        this.replayer = deltaConnection.getReplayer();
-        this.originalSummarySeqs = [];
+        this._replayer = deltaConnection.getReplayer();
         this.replayer.ops.forEach((op) => {
             if (op?.type === MessageType.Summarize) {
                 const seq = op.referenceSequenceNumber;
@@ -265,8 +287,8 @@ class Document {
  * All the logic of replay tool
  */
 export class ReplayTool {
-    private storage: ISnapshotWriterStorage;
-    private mainDocument: Document;
+    private _storage: ISnapshotWriterStorage | undefined;
+    private _mainDocument: Document | undefined;
     private documentNeverSnapshot?: Document;
     private documentPriorSnapshot?: Document;
     private documentPriorWindow?: Document;
@@ -274,13 +296,28 @@ export class ReplayTool {
     private readonly documentsWindow: Document[] = [];
     private readonly documentsFromStorageSnapshots: Document[] = [];
     private windiffCount = 0;
-    private deltaStorageService: FileDeltaStorageService;
+    private _deltaStorageService: FileDeltaStorageService | undefined;
     private readonly errors: string[] = [];
 
     public constructor(
         private readonly args: ReplayArgs,
         private readonly throwOnEvents: boolean = true,
     ) { }
+
+    private get storage(): ISnapshotWriterStorage {
+        assert(this._storage !== undefined, "should be defined");
+        return this._storage;
+    }
+
+    private get mainDocument(): Document {
+        assert(this._mainDocument !== undefined, "should be defined");
+        return this._mainDocument;
+    }
+
+    private get deltaStorageService(): FileDeltaStorageService {
+        assert(this._deltaStorageService !== undefined, "should be defined");
+        return this._deltaStorageService;
+    }
 
     public async Go(): Promise<string[]> {
         this.args.checkArgs();
@@ -370,7 +407,7 @@ export class ReplayTool {
             return Promise.reject(new Error("File does not exist"));
         }
 
-        this.deltaStorageService = new FileDeltaStorageService(this.args.inDirName);
+        this._deltaStorageService = new FileDeltaStorageService(this.args.inDirName);
 
         // Can't load files from ops any more, due to detached container creation
         // If there are snapshots present (from fetch tool), find latest snapshot and load from it.
@@ -399,9 +436,9 @@ export class ReplayTool {
             }
         }
 
-        this.storage = new FluidFetchReaderFileSnapshotWriter(this.args.inDirName, this.args.fromVersion);
+        this._storage = new FluidFetchReaderFileSnapshotWriter(this.args.inDirName, this.args.fromVersion);
         let description = this.args.fromVersion ? this.args.fromVersion : "main container";
-        this.mainDocument = new Document(this.args, this.storage, description, this.throwOnEvents);
+        this._mainDocument = new Document(this.args, this.storage, description, this.throwOnEvents);
         await this.loadDoc(this.mainDocument);
         this.documents.push(this.mainDocument);
         if (this.args.from < this.mainDocument.fromOp) {
@@ -603,11 +640,11 @@ export class ReplayTool {
             this.documentsWindow.push(document3);
         }
 
-        const startOp = op - this.args.overlappingContainers * this.args.snapFreq;
+        const startOp = op - this.args.overlappingContainers * (this.args.snapFreq ?? NaN);
         while (this.documentsWindow.length > 0
             && (final || this.documentsWindow[0].fromOp <= startOp)) {
             const doc = this.documentsWindow.shift();
-            assert(doc.fromOp === startOp || final,
+            assert(doc !== undefined && (doc.fromOp === startOp || final),
                 "Bad window to verify snapshot");
             await this.saveAndVerify(doc, dir, content, final);
         }
@@ -625,10 +662,11 @@ export class ReplayTool {
         }
         if (processVersionedSnapshot) {
             this.documentPriorSnapshot = this.documentsFromStorageSnapshots.shift();
-            assert(this.documentPriorSnapshot.fromOp === op, "Unexpected previous snapshot op number");
+            assert(this.documentPriorSnapshot !== undefined && this.documentPriorSnapshot.fromOp === op,
+                "Unexpected previous snapshot op number");
             await this.saveAndVerify(this.documentPriorSnapshot, dir, content, final)
                 .catch((e) => {
-                    const from = this.documentPriorSnapshot.containerDescription;
+                    const from = this.documentPriorSnapshot?.containerDescription;
                     this.reportError(`Error logged from ${from} while generating snapshot`, e);
                     this.documentPriorSnapshot = undefined;
                 });
