@@ -4,20 +4,13 @@
  */
 
 import { assert } from "@fluidframework/common-utils";
-import {
-    IFluidCodeDetails,
-    IRequest,
-    isFluidPackage,
-} from "@fluidframework/core-interfaces";
-import {
-    IUrlResolver,
-    IResolvedUrl,
-    DriverHeader,
-} from "@fluidframework/driver-definitions";
+import { IFluidCodeDetails, IRequest, isFluidPackage } from "@fluidframework/core-interfaces";
+import { DriverHeader, IResolvedUrl, IUrlResolver } from "@fluidframework/driver-definitions";
 import { IOdspResolvedUrl } from "./contracts";
-import { getHashedDocumentId } from "./odspUtils";
-import { getApiRoot } from "./odspUrlHelper";
 import { createOdspCreateContainerRequest } from "./createOdspCreateContainerRequest";
+import { createOdspUrl } from "./createOdspUrl";
+import { getApiRoot } from "./odspUrlHelper";
+import { getHashedDocumentId } from "./odspUtils";
 
 function getUrlBase(siteUrl: string, driveId: string, itemId: string, fileVersion?: string) {
     const siteOrigin = new URL(siteUrl).origin;
@@ -93,7 +86,7 @@ export class OdspDriverUrlResolver implements IUrlResolver {
         }
         const { siteUrl, driveId, itemId, path, containerPackageName, fileVersion } = decodeOdspUrl(request.url);
         const hashedDocumentId = getHashedDocumentId(driveId, itemId);
-        assert(!hashedDocumentId.includes("/"), "Docid should not contain slashes!!");
+        assert(!hashedDocumentId.includes("/"), 0x0a8 /* "Docid should not contain slashes!!" */);
 
         let documentUrl = `fluid-odsp://placeholder/placeholder/${hashedDocumentId}/${removeBeginningSlash(path)}`;
 
@@ -139,18 +132,17 @@ export class OdspDriverUrlResolver implements IUrlResolver {
             url = url.substr(1);
         }
         const odspResolvedUrl = resolvedUrl as IOdspResolvedUrl;
-        let odspUrl = `${odspResolvedUrl.siteUrl}/${url}?driveId=${encodeURIComponent(odspResolvedUrl.driveId,
-            )}&itemId=${encodeURIComponent(odspResolvedUrl.itemId)}&path=${encodeURIComponent("/")}`;
         const packageName = isFluidPackage(codeDetails?.package) ? codeDetails?.package.name : codeDetails?.package ??
              odspResolvedUrl.codeHint?.containerPackageName;
-        if (packageName) {
-            odspUrl += `&containerPackageName=${encodeURIComponent(packageName)}`;
-        }
-        if (odspResolvedUrl.fileVersion) {
-            odspUrl += `&fileVersion=${encodeURIComponent(odspResolvedUrl.fileVersion)}`;
-        }
 
-        return odspUrl;
+        return createOdspUrl(
+            odspResolvedUrl.siteUrl,
+            odspResolvedUrl.driveId,
+            odspResolvedUrl.itemId,
+            url,
+            packageName,
+            odspResolvedUrl.fileVersion,
+        );
     }
 
     public createCreateNewRequest(

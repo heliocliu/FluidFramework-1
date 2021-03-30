@@ -5,9 +5,11 @@
 
 import {
      IDocumentStorageService,
+    IDocumentStorageServicePolicies,
      ISummaryContext,
 } from "@fluidframework/driver-definitions";
 import {
+    ICreateBlobResponse,
     ISnapshotTree,
     ISummaryHandle,
     ISummaryTree,
@@ -29,16 +31,18 @@ import { ITelemetryLogger } from "@fluidframework/common-definitions";
 // We have to first ship with this gate off, such that we can get to saturation bits
 // that can understand compressed format. And only after that flip it.
 function gatesAllowPacking() {
-    // Leave override for testing purposes
-    // eslint-disable-next-line no-null/no-null
-    if (typeof localStorage === "object" && localStorage !== null) {
-        if  (localStorage.FluidAggregateBlobs === "1") {
-            return true;
+    try {
+        // Leave override for testing purposes
+        // eslint-disable-next-line no-null/no-null
+        if (typeof localStorage === "object" && localStorage !== null) {
+            if  (localStorage.FluidAggregateBlobs === "1") {
+                return true;
+            }
+            if  (localStorage.FluidAggregateBlobs === "0") {
+                return false;
+            }
         }
-        if  (localStorage.FluidAggregateBlobs === "0") {
-            return false;
-        }
-    }
+    } catch (e) {}
 
     // We are starting disabled.
     return false;
@@ -126,7 +130,7 @@ export abstract class SnapshotExtractor {
                         subTree = subTree.trees[subPath];
                     }
                     const blobName = pathSplit[pathSplit.length - 1];
-                    assert(subTree.blobs[blobName] === undefined, "real blob ID exists");
+                    assert(subTree.blobs[blobName] === undefined, 0x0f6 /* "real blob ID exists" */);
                     subTree.blobs[blobName] = id;
                 }
                 // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
@@ -152,12 +156,12 @@ export abstract class SnapshotExtractor {
 class SnapshotExtractorInPlace extends SnapshotExtractor {
     public async getBlob(id: string, tree: ISnapshotTree): Promise<ArrayBufferLike> {
         const blob = tree.blobs[id];
-        assert(blob !== undefined, "aggregate blob missing");
+        assert(blob !== undefined, 0x0f7 /* "aggregate blob missing" */);
         return stringToBuffer(blob, "base64");
     }
 
     public setBlob(id: string, tree: ISnapshotTree, content: string) {
-        assert(tree.blobs[id] === undefined, "blob from aggregate blob exists on its own");
+        assert(tree.blobs[id] === undefined, 0x0f8 /* "blob from aggregate blob exists on its own" */);
         tree.blobs[id] = fromUtf8ToBase64(content);
     }
 }
@@ -200,7 +204,7 @@ export class BlobAggregationStorage extends SnapshotExtractor implements IDocume
         await converter.unpackSnapshotCore(snapshot);
     }
 
-    public get policies() {
+    public get policies(): IDocumentStorageServicePolicies | undefined {
         const policies = this.storage.policies;
         if (policies) {
             return { ...policies, minBlobSize: undefined };
@@ -252,7 +256,9 @@ export class BlobAggregationStorage extends SnapshotExtractor implements IDocume
 
     // for now we are not optimizing these blobs, with assumption that this API is used only
     // for big blobs (images)
-    public async createBlob(file: ArrayBufferLike) { return this.storage.createBlob(file); }
+    public async createBlob(file: ArrayBufferLike): Promise<ICreateBlobResponse> {
+        return this.storage.createBlob(file);
+    }
 
     public async getSnapshotTree(version?: IVersion): Promise<ISnapshotTree | null> {
         const tree = await this.storage.getSnapshotTree(version);
@@ -265,7 +271,7 @@ export class BlobAggregationStorage extends SnapshotExtractor implements IDocume
     public async read(id: string): Promise<string> {
         // optimize it a bit to avoid unneeded conversions while we transition to using readBlob everywhere.
         if (this.isRealStorageId(id)) {
-            return this.storage.read(id);
+            return bufferToString2(await this.storage.readBlob(id),"base64");
         }
         const blob = await this.readBlob(id);
         return bufferToString2(blob, "base64");
@@ -282,9 +288,9 @@ export class BlobAggregationStorage extends SnapshotExtractor implements IDocume
 
         // are there other ways we can get here? createFile is one flow, but we should not be reading blobs
         // in such flow
-        assert(this.loadedFromSummary, "never read summary");
+        assert(this.loadedFromSummary, 0x0f9 /* "never read summary" */);
         const blob = this.virtualBlobs.get(id);
-        assert(blob !== undefined, "virtual blob not found");
+        assert(blob !== undefined, 0x0fa /* "virtual blob not found" */);
         return blob;
     }
 
@@ -319,7 +325,7 @@ export class BlobAggregationStorage extends SnapshotExtractor implements IDocume
 
         let aggregator = aggregatorArg;
         if (startingLevel) {
-            assert(aggregator === undefined, "logic err with aggregator");
+            assert(aggregator === undefined, 0x0fb /* "logic err with aggregator" */);
             aggregator = new BlobAggregator();
         }
 
@@ -359,26 +365,27 @@ export class BlobAggregationStorage extends SnapshotExtractor implements IDocume
                         handlePath = handlePath.substr(1);
                     }
                     // Ensure only whole data stores can be reused, no reusing at deeper level!
-                    assert(level === 0, "tree reuse at lower level");
-                    assert(handlePath.indexOf("/") === -1, "data stores are writing incremental summaries!");
+                    assert(level === 0, 0x0fc /* "tree reuse at lower level" */);
+                    assert(handlePath.indexOf("/") === -1,
+                        0x0fd /* "data stores are writing incremental summaries!" */);
                     break;
                 }
                 case SummaryType.Attachment:
-                    assert(this.isRealStorageId(obj.id), "attachment is aggregate blob");
+                    assert(this.isRealStorageId(obj.id), 0x0fe /* "attachment is aggregate blob" */);
                     break;
                 default:
                     unreachableCase(obj, `Unknown type: ${(obj as any).type}`);
             }
         }
 
-        assert(newSummary.tree[this.aggregatedBlobName] === undefined, "duplicate aggregate blob");
+        assert(newSummary.tree[this.aggregatedBlobName] === undefined, 0x0ff /* "duplicate aggregate blob" */);
         if (startingLevel) {
             // Note: It would be great to add code here to unpack aggregate blob back to normal blobs
             // If only one blob made it into aggregate. Currently that does not happen as we always have
             // at least one .component blob and at least one DDS that has .attributes blob, so it's not an issue.
             // But it's possible that in future that would be great addition!
             // Good news - it's backward compatible change.
-            assert(aggregator !== undefined, "logic error");
+            assert(aggregator !== undefined, 0x100 /* "logic error" */);
             const content = aggregator.getAggregatedBlobContent();
             if (content !== undefined) {
                 newSummary.tree[this.aggregatedBlobName] = {

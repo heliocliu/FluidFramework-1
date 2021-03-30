@@ -29,6 +29,7 @@ import {
     buildRuntimeRequestHandler,
 } from "@fluidframework/request-handler";
 import { defaultRouteRequestHandler } from "@fluidframework/aqueduct";
+import { create404Response } from "@fluidframework/runtime-utils";
 import { Document } from "./document";
 
 const rootMapId = "root";
@@ -46,33 +47,6 @@ export class Chaincode implements IFluidDataStoreFactory {
     { }
 
     public async instantiateDataStore(context: IFluidDataStoreContext) {
-        // Create channel factories
-        const mapFactory = map.SharedMap.getFactory();
-        const sharedStringFactory = sequence.SharedString.getFactory();
-        const inkFactory = ink.Ink.getFactory();
-        const cellFactory = cell.SharedCell.getFactory();
-        const objectSequenceFactory = sequence.SharedObjectSequence.getFactory();
-        const numberSequenceFactory = sequence.SharedNumberSequence.getFactory();
-        const consensusQueueFactory = ConsensusQueue.getFactory();
-        const sparseMatrixFactory = sequence.SparseMatrix.getFactory();
-        const directoryFactory = map.SharedDirectory.getFactory();
-        const sharedIntervalFactory = sequence.SharedIntervalCollection.getFactory();
-        const sharedMatrixFactory = SharedMatrix.getFactory();
-
-        // Register channel factories
-        const modules = new Map<string, any>();
-        modules.set(mapFactory.type, mapFactory);
-        modules.set(sharedStringFactory.type, sharedStringFactory);
-        modules.set(inkFactory.type, inkFactory);
-        modules.set(cellFactory.type, cellFactory);
-        modules.set(objectSequenceFactory.type, objectSequenceFactory);
-        modules.set(numberSequenceFactory.type, numberSequenceFactory);
-        modules.set(consensusQueueFactory.type, consensusQueueFactory);
-        modules.set(sparseMatrixFactory.type, sparseMatrixFactory);
-        modules.set(directoryFactory.type, directoryFactory);
-        modules.set(sharedIntervalFactory.type, sharedIntervalFactory);
-        modules.set(sharedMatrixFactory.type, sharedMatrixFactory);
-
         const runtimeClass = mixinRequestHandler(
             async (request: IRequest) => {
                 const document = await routerP;
@@ -83,12 +57,24 @@ export class Chaincode implements IFluidDataStoreFactory {
                         value: document,
                     };
                 } else {
-                    return { status: 404, mimeType: "text/plain", value: `${request.url} not found` };
+                    return create404Response(request);
                 }
             },
             this.dataStoreFactory);
 
-        const runtime = new runtimeClass(context, modules);
+        const runtime = new runtimeClass(context, new Map([
+            map.SharedMap.getFactory(),
+            sequence.SharedString.getFactory(),
+            ink.Ink.getFactory(),
+            cell.SharedCell.getFactory(),
+            sequence.SharedObjectSequence.getFactory(),
+            sequence.SharedNumberSequence.getFactory(),
+            ConsensusQueue.getFactory(),
+            sequence.SparseMatrix.getFactory(),
+            map.SharedDirectory.getFactory(),
+            sequence.SharedIntervalCollection.getFactory(),
+            SharedMatrix.getFactory(),
+        ].map((factory) => [factory.type, factory])));
 
         // Initialize core data structures
         let root: map.ISharedMap;

@@ -172,7 +172,6 @@ export class SummaryManager extends EventEmitter implements IDisposable {
     constructor(
         private readonly context: IContainerContext,
         private readonly summariesEnabled: boolean,
-        private readonly enableWorker: boolean,
         parentLogger: ITelemetryLogger,
         private readonly setNextSummarizer: (summarizer: Promise<Summarizer>) => void,
         private nextSummarizerP?: Promise<Summarizer>,
@@ -184,8 +183,7 @@ export class SummaryManager extends EventEmitter implements IDisposable {
         this.logger = ChildLogger.create(
             parentLogger,
             "SummaryManager",
-            undefined,
-            { clientId: () => this.latestClientId });
+            {all:{ clientId: () => this.latestClientId }});
 
         this.connected = context.connected;
         if (this.connected) {
@@ -433,7 +431,6 @@ export class SummaryManager extends EventEmitter implements IDisposable {
             [DriverHeader.summarizingClient]: true,
             [LoaderHeader.reconnect]: false,
             [LoaderHeader.sequenceNumber]: this.context.deltaManager.lastSequenceNumber,
-            [LoaderHeader.executionContext]: this.enableWorker ? "worker" : undefined,
         };
         // TODO eventually we may wish to spawn an execution context from which to run this
         const request: IRequest = {

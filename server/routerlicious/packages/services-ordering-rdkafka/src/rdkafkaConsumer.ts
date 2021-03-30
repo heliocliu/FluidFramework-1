@@ -79,37 +79,38 @@ export class RdkafkaConsumer extends RdkafkaBase implements IConsumer {
 			...this.consumerOptions.additionalOptions,
 		};
 
-		this.consumer = new kafka.KafkaConsumer(options, { "auto.offset.reset": "latest" });
+		const consumer: kafkaTypes.KafkaConsumer = this.consumer =
+			new kafka.KafkaConsumer(options, { "auto.offset.reset": "latest" });
 
-		this.consumer.setDefaultConsumeTimeout(this.consumerOptions.consumeTimeout);
-		this.consumer.setDefaultConsumeLoopTimeoutDelay(this.consumerOptions.consumeLoopTimeoutDelay);
+		consumer.setDefaultConsumeTimeout(this.consumerOptions.consumeTimeout);
+		consumer.setDefaultConsumeLoopTimeoutDelay(this.consumerOptions.consumeLoopTimeoutDelay);
 
-		this.consumer.on("ready", () => {
-			this.consumer.subscribe([this.topic]);
+		consumer.on("ready", () => {
+			consumer.subscribe([this.topic]);
 
 			if (this.consumerOptions.automaticConsume) {
 				// start the consume loop
-				this.consumer.consume();
+				consumer.consume();
 			}
 
-			this.emit("connected", this.consumer);
+			this.emit("connected", consumer);
 		});
 
-		this.consumer.on("disconnected", () => {
+		consumer.on("disconnected", () => {
 			this.emit("disconnected");
 		});
 
-		this.consumer.on("connection.failure", async (error) => {
+		consumer.on("connection.failure", async (error) => {
 			await this.close(true);
 
-			this.emit("error", error);
+			this.error(error);
 
 			this.connect();
 		});
 
-		this.consumer.on("data", this.processMessage.bind(this));
+		consumer.on("data", this.processMessage.bind(this));
 
-		this.consumer.on("offset.commit", (err, offsets) => {
+		consumer.on("offset.commit", (err, offsets) => {
 			let shouldRetryCommit = false;
 
 			if (err) {
@@ -121,7 +122,7 @@ export class RdkafkaConsumer extends RdkafkaBase implements IConsumer {
 						err.code === kafka.CODES.ERRORS.ERR_ILLEGAL_GENERATION);
 
 				if (!shouldRetryCommit) {
-					this.emit("error", err);
+					this.error(err);
 				}
 			}
 
@@ -148,12 +149,12 @@ export class RdkafkaConsumer extends RdkafkaBase implements IConsumer {
 						this.emit("checkpoint", offset.partition, offset.offset);
 					}
 				} else {
-					this.emit("error", new Error(`Unknown commit for partition ${offset.partition}`));
+					this.error(new Error(`Unknown commit for partition ${offset.partition}`));
 				}
 			}
 		});
 
-		this.consumer.on("rebalance", async (err, topicPartitions) => {
+		consumer.on("rebalance", async (err, topicPartitions) => {
 			if (err.code === kafka.CODES.ERRORS.ERR__ASSIGN_PARTITIONS ||
 				err.code === kafka.CODES.ERRORS.ERR__REVOKE_PARTITIONS) {
 				const newAssignedPartitions = new Set<number>(topicPartitions.map((tp) => tp.partition));
@@ -162,21 +163,6 @@ export class RdkafkaConsumer extends RdkafkaBase implements IConsumer {
 					Array.from(this.assignedPartitions).every((ap) => newAssignedPartitions.has(ap))) {
 					// the consumer is already up to date
 					return;
-				}
-
-				// cleanup things left over from the lost partitions
-				for (const partition of this.assignedPartitions) {
-					if (!newAssignedPartitions.has(partition)) {
-						// clear latest offset
-						this.latestOffsets.delete(partition);
-
-						// reject pending commit
-						const deferredCommit = this.pendingCommits.get(partition);
-						if (deferredCommit) {
-							this.pendingCommits.delete(partition);
-							deferredCommit.reject(new Error(`Partition for commit was unassigned. ${partition}`));
-						}
-					}
 				}
 
 				// clear pending messages
@@ -190,6 +176,7 @@ export class RdkafkaConsumer extends RdkafkaBase implements IConsumer {
 					}
 				}
 
+				const originalAssignedPartitions = this.assignedPartitions;
 				this.assignedPartitions = newAssignedPartitions;
 
 				try {
@@ -197,6 +184,22 @@ export class RdkafkaConsumer extends RdkafkaBase implements IConsumer {
 					const partitions = this.getPartitions(this.assignedPartitions);
 					const partitionsWithEpoch = await this.fetchPartitionEpochs(partitions);
 					this.emit("rebalanced", partitionsWithEpoch, err.code);
+
+					// cleanup things left over from the lost partitions
+					for (const partition of originalAssignedPartitions) {
+						if (!newAssignedPartitions.has(partition)) {
+							// clear latest offset
+							this.latestOffsets.delete(partition);
+
+							// reject pending commit
+							const deferredCommit = this.pendingCommits.get(partition);
+							if (deferredCommit) {
+								this.pendingCommits.delete(partition);
+								deferredCommit.reject(new Error(`Partition for commit was unassigned. ${partition}`));
+							}
+						}
+					}
+
 					this.isRebalancing = false;
 
 					for (const pendingMessages of this.pendingMessages.values()) {
@@ -207,28 +210,28 @@ export class RdkafkaConsumer extends RdkafkaBase implements IConsumer {
 					}
 				} catch (ex) {
 					this.isRebalancing = false;
-					this.emit("error", ex);
+					this.error(ex);
 				} finally {
 					this.pendingMessages.clear();
 				}
 			} else {
-				this.emit("error", err);
+				this.error(err);
 			}
 		});
 
-		this.consumer.on("rebalance.error", (error) => {
-			this.emit("error", error);
+		consumer.on("rebalance.error", (error) => {
+			this.error(error);
 		});
 
-		this.consumer.on("event.error", (error) => {
-			this.emit("error", error);
+		consumer.on("event.error", (error) => {
+			this.error(error);
 		});
 
-		this.consumer.on("event.throttle", (event) => {
+		consumer.on("event.throttle", (event) => {
 			this.emit("throttled", event);
 		});
 
-		this.consumer.connect();
+		consumer.connect();
 	}
 
 	public async close(reconnecting: boolean = false): Promise<void> {
@@ -291,11 +294,13 @@ export class RdkafkaConsumer extends RdkafkaBase implements IConsumer {
 
 	public async pause() {
 		this.consumer?.unsubscribe();
+		this.emit("paused");
 		return Promise.resolve();
 	}
 
 	public async resume() {
 		this.consumer?.subscribe([this.topic]);
+		this.emit("resumed");
 		return Promise.resolve();
 	}
 
@@ -308,7 +313,7 @@ export class RdkafkaConsumer extends RdkafkaBase implements IConsumer {
 	private processMessage(message: kafkaTypes.Message) {
 		const partition = message.partition;
 
-		if (this.assignedPartitions.has(partition) && this.isRebalancing) {
+		if (this.isRebalancing && this.assignedPartitions.has(partition)) {
 			/*
 				It is possible to receive messages while we have not yet finished rebalancing
 				due to how we wait for the fetchPartitionEpochs call to finish before emitting the rebalanced event.

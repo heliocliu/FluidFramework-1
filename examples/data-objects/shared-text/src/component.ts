@@ -10,6 +10,7 @@ import registerDebug from "debug";
 import { controls, ui } from "@fluid-example/client-ui-lib";
 import { TextAnalyzer } from "@fluid-example/intelligence-runner-agent";
 import * as API from "@fluid-internal/client-api";
+import { IAgentScheduler } from "@fluidframework/agent-scheduler";
 import { SharedCell } from "@fluidframework/cell";
 import { performance } from "@fluidframework/common-utils";
 import {
@@ -28,15 +29,13 @@ import {
 import * as MergeTree from "@fluidframework/merge-tree";
 import {
     IFluidDataStoreContext,
-    ITask,
-    ITaskManager,
 } from "@fluidframework/runtime-definitions";
 import {
     SharedNumberSequence,
     SharedObjectSequence,
     SharedString,
 } from "@fluidframework/sequence";
-import { requestFluidObject, RequestParser } from "@fluidframework/runtime-utils";
+import { requestFluidObject, RequestParser, create404Response } from "@fluidframework/runtime-utils";
 import { IFluidHTMLView } from "@fluidframework/view-interfaces";
 import { Document } from "./document";
 import { downloadRawText, getInsights, setTranslation } from "./utils";
@@ -76,7 +75,6 @@ export class SharedTextRunner
     private insightsMap: ISharedMap;
     private rootView: ISharedMap;
     private collabDoc: Document;
-    private taskManager: ITaskManager;
     private uiInitialized = false;
     private readonly title: string = "Shared Text";
 
@@ -109,7 +107,7 @@ export class SharedTextRunner
             return { status:200, mimeType: "fluid/sharedstring", value: this.sharedString };
         }
         else {
-            return { status: 404, mimeType: "text/plain", value: `${request.url} not found` };
+            return create404Response(request);
         }
     }
 
@@ -181,7 +179,11 @@ export class SharedTextRunner
         debug(`id is ${this.runtime.id}`);
         debug(`Partial load fired: ${performance.now()}`);
 
-        this.taskManager = await this.context.containerRuntime.getTaskManager();
+        const agentSchedulerResponse = await this.context.containerRuntime.request({ url: "/_scheduler" });
+        if (agentSchedulerResponse.status === 404) {
+            throw new Error("Agent scheduler not found");
+        }
+        const agentScheduler = agentSchedulerResponse.value as IAgentScheduler;
 
         const options = parse(window.location.search.substr(1));
         setTranslation(
@@ -195,7 +197,7 @@ export class SharedTextRunner
 
         const taskScheduler = new TaskScheduler(
             this.context,
-            this.taskManager,
+            agentScheduler,
             this.sharedString,
             this.insightsMap,
         );
@@ -264,7 +266,7 @@ export class SharedTextRunner
 class TaskScheduler {
     constructor(
         private readonly componentContext: IFluidDataStoreContext,
-        private readonly taskManager: ITaskManager,
+        private readonly agentScheduler: IAgentScheduler,
         private readonly sharedString: SharedString,
         private readonly insightsMap: ISharedMap,
     ) {
@@ -279,16 +281,12 @@ class TaskScheduler {
             : undefined;
 
         if (intelTokens?.key?.length > 0) {
-            const intelTask: ITask = {
-                id: "intel",
-                instance: new TextAnalyzer(this.sharedString, this.insightsMap, intelTokens),
-            };
-            this.taskManager.register(intelTask);
-            this.taskManager.pick(intelTask.id).then(() => {
+            const intelTaskId = "intel";
+            const textAnalyzer = new TextAnalyzer(this.sharedString, this.insightsMap, intelTokens);
+            this.agentScheduler.pick(intelTaskId, async () => {
                 console.log(`Picked text analyzer`);
-            }, (err) => {
-                console.log(JSON.stringify(err));
-            });
+                await textAnalyzer.run();
+            }).catch((err) => { console.error(err); });
         } else {
             console.log("No intel key provided.");
         }
@@ -296,28 +294,19 @@ class TaskScheduler {
 }
 
 export function instantiateDataStore(context: IFluidDataStoreContext) {
-    const modules = new Map<string, any>();
-
-    // Create channel factories
-    const mapFactory = SharedMap.getFactory();
-    const sharedStringFactory = SharedString.getFactory();
-    const cellFactory = SharedCell.getFactory();
-    const objectSequenceFactory = SharedObjectSequence.getFactory();
-    const numberSequenceFactory = SharedNumberSequence.getFactory();
-
-    modules.set(mapFactory.type, mapFactory);
-    modules.set(sharedStringFactory.type, sharedStringFactory);
-    modules.set(cellFactory.type, cellFactory);
-    modules.set(objectSequenceFactory.type, objectSequenceFactory);
-    modules.set(numberSequenceFactory.type, numberSequenceFactory);
-
     const runtimeClass = mixinRequestHandler(
         async (request: IRequest) => {
             const router = await routerP;
             return router.request(request);
         });
 
-    const runtime = new runtimeClass(context, modules);
+    const runtime = new runtimeClass(context, new Map([
+        SharedMap.getFactory(),
+        SharedString.getFactory(),
+        SharedCell.getFactory(),
+        SharedObjectSequence.getFactory(),
+        SharedNumberSequence.getFactory(),
+    ].map((factory) => [factory.type, factory])));
     const routerP = SharedTextRunner.load(runtime, context);
 
     return runtime;

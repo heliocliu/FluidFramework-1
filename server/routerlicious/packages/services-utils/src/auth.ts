@@ -3,35 +3,34 @@
  * Licensed under the MIT License.
  */
 
+// In this case we want @types/express-serve-static-core, not express-serve-static-core, and so disable the lint rule
+// eslint-disable-next-line import/no-unresolved
+import { Params } from "express-serve-static-core";
 import { ITokenClaims, IUser, ScopeType } from "@fluidframework/protocol-definitions";
 import * as jwt from "jsonwebtoken";
 import { v4 as uuid } from "uuid";
+import { NetworkError, validateTokenClaimsExpiration } from "@fluidframework/server-services-client";
+import type { ITenantManager } from "@fluidframework/server-services-core";
+import type { RequestHandler } from "express";
+import type { Provider } from "nconf";
 
 /**
- * Validates a JWT token to authorize routerlicious and returns decoded claims.
- * An undefined return value indicates invalid claims.
+ * Validates a JWT token to authorize routerlicious.
+ * @returns decoded claims.
+ * @throws {NetworkError} if claims are invalid.
  */
 export function validateTokenClaims(
     token: string,
     documentId: string,
-    tenantId: string,
-    maxTokenLifetimeSec: number,
-    isTokenExpiryEnabled: boolean): ITokenClaims | undefined {
+    tenantId: string): ITokenClaims {
     const claims = jwt.decode(token) as ITokenClaims;
 
     if (!claims || claims.documentId !== documentId || claims.tenantId !== tenantId) {
-        return undefined;
+        throw new NetworkError(403, "DocumentId and/or TenantId in token claims do not match request.");
     }
 
     if (claims.scopes === undefined || claims.scopes.length === 0) {
-        return undefined;
-    }
-
-    if (isTokenExpiryEnabled && claims.exp && claims.iat) {
-        const now = Math.round((new Date()).getTime() / 1000);
-        if (now >= claims.exp || claims.exp - claims.iat > maxTokenLifetimeSec) {
-            return undefined;
-        }
+        throw new NetworkError(403, "Missing scopes in token claims.");
     }
 
     return claims;
@@ -78,4 +77,54 @@ export function generateUser(): IUser {
     };
 
     return randomUser;
+}
+
+/**
+ * Verifies the storage token claims and calls riddler to validate the token.
+ */
+// eslint-disable-next-line prefer-arrow/prefer-arrow-functions
+export function verifyStorageToken(tenantManager: ITenantManager, config: Provider): RequestHandler {
+    return (request, res, next) => {
+        const maxTokenLifetimeSec = config.get("auth:maxTokenLifetimeSec") as number;
+        const isTokenExpiryEnabled = config.get("auth:enableTokenExpiration") as boolean;
+        const authorizationHeader = request.header("Authorization");
+        if (!authorizationHeader) {
+            return res.status(403).send("Missing Authorization header.");
+        }
+        const regex = /Basic (.+)/;
+        const tokenMatch = regex.exec(authorizationHeader);
+        if (!tokenMatch || !tokenMatch[1]) {
+            return res.status(403).send("Missing access token.");
+        }
+        const token = tokenMatch[1];
+        const tenantId = getParam(request.params, "tenantId");
+        const documentId = getParam(request.params, "id") || request.body.id;
+        if (!tenantId || !documentId) {
+            return res.status(403).send("Missing tenantId or documentId in request.");
+        }
+        let claims: ITokenClaims;
+        try {
+            claims = validateTokenClaims(token, documentId, tenantId);
+            if (isTokenExpiryEnabled) {
+                validateTokenClaimsExpiration(claims, maxTokenLifetimeSec);
+            }
+        } catch (error) {
+            if (error instanceof NetworkError) {
+                return res.status(error.code).send(error.message);
+            }
+            throw error;
+        }
+        tenantManager.verifyToken(claims.tenantId, token)
+            .then(() => {
+                next();
+            })
+            .catch((error) => {
+                return res.status(403).json(error);
+            });
+    };
+}
+
+// eslint-disable-next-line prefer-arrow/prefer-arrow-functions
+export function getParam(params: Params, key: string) {
+    return Array.isArray(params) ? undefined : params[key];
 }

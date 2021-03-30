@@ -47,12 +47,14 @@ export class CheckpointContext {
             },
             (error) => {
                 // TODO flag context as error
-                const messageMetaData = {
-                    documentId: this.id,
-                    tenantId: this.tenantId,
-                };
-                this.context.log.error(
-                    `Error writing checkpoint to MongoDB: ${JSON.stringify(error)}`, { messageMetaData });
+                this.context.log?.error(
+                    `Error writing checkpoint to MongoDB: ${JSON.stringify(error)}`,
+                    {
+                        messageMetaData: {
+                            documentId: this.id,
+                            tenantId: this.tenantId,
+                        },
+                    });
             });
     }
 
@@ -80,6 +82,7 @@ export class CheckpointContext {
                 sequenceNumber: checkpoint.sequenceNumber,
                 epoch: checkpoint.epoch,
                 term: checkpoint.term,
+                lastSentMSN: checkpoint.lastSentMSN,
             };
 
             updateP = this.checkpointManager.writeCheckpoint(deliCheckpoint);
@@ -88,12 +91,14 @@ export class CheckpointContext {
         // Retry the checkpoint on error
         // eslint-disable-next-line @typescript-eslint/promise-function-async
         return updateP.catch((error) => {
-            const messageMetaData = {
-                documentId: this.id,
-                tenantId: this.tenantId,
-            };
-            this.context.log.error(
-                `Error writing checkpoint to MongoDB: ${JSON.stringify(error)}`, { messageMetaData });
+            this.context.log?.error(
+                `Error writing checkpoint to MongoDB: ${JSON.stringify(error)}`,
+                {
+                    messageMetaData: {
+                        documentId: this.id,
+                        tenantId: this.tenantId,
+                    },
+                });
             return new Promise<void>((resolve, reject) => {
                 resolve(this.checkpointCore(checkpoint));
             });

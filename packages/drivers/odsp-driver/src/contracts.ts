@@ -132,7 +132,7 @@ export enum SnapshotType {
     Channel = "channel",
 }
 
-export interface ISnapshotRequest {
+export interface IOdspSummaryPayload {
     type: SnapshotType;
     message: string;
     sequenceNumber: number;
@@ -247,6 +247,8 @@ export interface HostStoragePolicy {
      * Passing true results in faster loads and keeping cache more current, but it increases bandwidth consumption.
      */
     concurrentSnapshotFetch?: boolean;
+
+    blobDeduping?: boolean;
 }
 
 /**

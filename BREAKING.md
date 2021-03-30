@@ -1,12 +1,65 @@
+## 0.37 Breaking changes
+- [OpProcessingController marked for deprecation](#opprocessingcontroller-marked-for-deprecation)
+- [Loader in data stores deprecated](#Loader-in-data-stores-deprecated)
+- [TelemetryLogger Properties Format](#TelemetryLogger-Properties-Format)
+- [AgentScheduler moves and renames](#AgentScheduler-moves-and-renames)
+
+### OpProcessingController marked for deprecation
+`OpProcessingController` is marked for deprecation and we be removed in 0.38.
+`LoaderContainerTracker` is the replacement with better tracking.  The API differs from `OpProcessingController` in the following ways:
+- Loader is added for tracking and any Container created/loaded will be automatically tracked
+- The op control APIs accept Container instead of DeltaManager
+### Loader in data stores deprecated
+The `loader` property on the `IContainerRuntime`, `IFluidDataStoreRuntime`, and `IFluidDataStoreContext` interfaces is now deprecated and will be removed in an upcoming release.  Data store objects will no longer have access to an `ILoader` by default.  To replicate the same behavior, existing users can make the `ILoader` used to create a `Container` available on the `scope` property of these interfaces instead by setting the `provideScopeLoader` `ILoaderOptions` flag when creating the loader.
+```typescript
+const loader = new Loader({
+    urlResolver,
+    documentServiceFactory,
+    codeLoader,
+    options: { provideScopeLoader: true },
+    });
+```
+```typescript
+const loader: ILoader | undefined = this.context.scope.ILoader;
+```
+
+### TelemetryLogger Properties Format
+The TelemetryLogger's properties format has been updated to support error only properties. This includes: `ChildLogger`, `MultiSinkLogger`,`DebugLogger`.
+The previous format was just a property bag:
+    `ChildLogger.create(logger, undefined, { someProperty: uuid() });`
+Whereas now it has nested property bags for error categories including `all` and `error`:
+    `ChildLogger.create(logger, undefined, {all:{ someProperty: uuid() }});`
+
+### AgentScheduler moves and renames
+`IAgentScheduler` and `IProvideAgentScheduler` have been moved to the `@fluidframework/agent-scheduler` package, and `taskSchedulerId` has been renamed to `agentSchedulerId`.
+
 ## 0.36 Breaking changes
-- [Changes-to-Loader-request-headers-and-usage]
+- [Some `ILoader` APIs moved to `IHostLoader`](#Some-ILoader-APIs-moved-to-IHostLoader)
+- [TaskManager removed](#TaskManager-removed)
+- [ContainerRuntime registerTasks removed](#ContainerRuntime-registerTasks-removed)
+- [getRootDataStore](#getRootDataStore)
+- [Share link generation no longer exposed externally](#Share-link-generation-no-longer-exposed-externally)
+- [ITelemetryLogger redundant method deprecation](#ITelemetryLogger-redundant-method-deprecation)
 
-### Changes to Loader request headers and usage
-Some Loader headers are being deprecated.
+### Some `ILoader` APIs moved to `IHostLoader`
+The `createDetachedContainer` and `rehydrateDetachedContainerFromSnapshot` APIs are removed from the `ILoader` interface, and have been moved to the new `IHostLoader` interface.  The `Loader` class now implements `IHostLoader` instead, and consumers who need these methods should operate on an `IHostLoader` instead of an `ILoader`, such as by creating a `Loader`.
 
-`cache`, `pause`, and `reconnect` should now be specified as part of the `ILoaderOptions` when creating the Loader.  These options are static for a `Loader` instance.  Callers that previously specified these options through the `ILoaderHeader` should instead create a new `Loader` instance with the desired options.
+### TaskManager removed
+The `TaskManager` has been removed, as well as methods to access it (e.g. the `.taskManager` member on `DataObject`).  The `AgentScheduler` should be used instead for the time being and can be accessed via a request on the `ContainerRuntime` (e.g. `await this.context.containerRuntime.request({ url: "/_scheduler" })`), though we expect this will also be deprecated and removed in a future release when an alternative is made available (see #4413).
 
-`version` should now be specified as part of the request url when calling `Loader.request(...)` or `Loader.resolve(...)` (this method was already supported previously).
+### ContainerRuntime registerTasks removed
+The `registerTasks` method has been removed from `ContainerRuntime`.  The `AgentScheduler` should be used instead for task scheduling.
+
+### getRootDataStore
+IContainerRuntime.getRootDataStore() used to have a backdoor allowing accessing any store, including non-root stores. This back door is removed - you can only access root data stores using this API.
+
+### Share link generation no longer exposed externally
+Share link generation implementation has been refactored to remove options for generating share links of various kinds.
+Method for generating share link is no longer exported.
+ShareLinkTokenFetchOptions has been removed and OdspDriverUrlResolverForShareLink constructor has been changed to accept tokenFetcher parameter which will pass OdspResourceTokenFetchOptions instead of ShareLin   kTokenFetchOptions.
+
+### ITelemetryLogger redundant method deprecation
+Deprecate `shipAssert` `debugAssert` `logException` `logGenericError` in favor of `sendErrorEvent` as they provide the same behavior and semantics as `sendErrorEvent`and in general are relatively unused.
 
 ## 0.35 Breaking changes
 - [Removed some api implementations from odsp driver](#Removed-some-api-implemenations-from-odsp-driver)
@@ -15,6 +68,7 @@ Some Loader headers are being deprecated.
 - [Refactored token fetcher types in odsp-driver](#refactored-token-fetcher-types-in-odsp-driver)
 - [DeltaManager `readonly` and `readOnlyPermissions` properties deprecated](#DeltaManager-`readonly`-and-`readOnlyPermissions`-properties-deprecated)
 - [DirtyDocument events and property](#DirtyDocument-events-and-property)
+- [Removed `createDocumentService` and `createDocumentService2` from r11s driver](#Removed-`createDocumentService`-and-`createDocumentService2`-from-r11s-driver)
 
 ### Removed-some-api-implementations-from-odsp-driver
 Removed `authorizedFetchWithRetry`, `AuthorizedRequestTokenPolicy`, `AuthorizedFetchProps`, `asyncWithCache`, `asyncWithRetry`,
@@ -39,6 +93,9 @@ The following 3 names have been deprecated - please use new names:
 "savedDocument" event -> "saved" event
 isDocumentDirty property -> isDirty property
 
+### Removed `createDocumentService` and `createDocumentService2` from r11s driver
+Removed the deprecated methods `createDocumentService` and `createDocumentService2`. Please use `DocumentServiceFactory.createDocumentService` instead.
+
 ## 0.34 Breaking changes
 - [Aqueduct writeBlob() and BlobHandle implementation removed](#Aqueduct-writeBlob-and-BlobHandle-implementation-removed)
 - [Connected events raised on registration](#Connected-events-raised-on-registration)
@@ -48,7 +105,7 @@ isDocumentDirty property -> isDirty property
 
 ### Connected events raised on registration
 Connected / disconnected listeners are called on registration.
-Pleas see [Connectivity events](packages/loader/container-loader/README.md#Connectivity-events) section of Loader readme.md for more details
+Please see [Connectivity events](packages/loader/container-loader/README.md#Connectivity-events) section of Loader readme.md for more details
 
 ## 0.33 Breaking changes
 - [Normalizing enum ContainerErrorType](#normalizing-enum-containererrortype)

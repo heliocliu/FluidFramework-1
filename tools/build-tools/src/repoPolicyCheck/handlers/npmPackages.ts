@@ -29,7 +29,9 @@ Use of Microsoft trademarks or logos in modified versions of this project must n
 
 function packageShouldBePrivate(name: string): boolean {
     // See https://github.com/microsoft/FluidFramework/issues/2625
-    if (name === "@fluid-internal/client-api") {
+    if (name === "@fluid-internal/client-api"
+        || name.startsWith("@fluid-internal/test-")         // allow test packages to be packaged
+    ) {
         return false;
     }
 
@@ -299,7 +301,7 @@ export const handlers: Handler[] = [
             // Full match isn't required for cases where the package name is prefixed with names from earlier in the path
             if (!nameWithoutScope.toLowerCase().endsWith(folderName.toLowerCase())) {
                 // These packages don't follow the convention of the dir matching the tail of the package name
-                const skip = ["root", "chaincode-loader"].some((skipMe) => packageName === skipMe);
+                const skip = ["root"].some((skipMe) => packageName === skipMe);
                 if (!skip) {
                     return `Containing folder ${folderName} for package ${packageName} should be named similarly to the package`;
                 }

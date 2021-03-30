@@ -6,14 +6,20 @@
 import { fromUtf8ToBase64 } from "@fluidframework/common-utils";
 import * as git from "@fluidframework/gitresources";
 import { IClient, IClientJoin, ScopeType } from "@fluidframework/protocol-definitions";
+import { validateTokenClaimsExpiration } from "@fluidframework/server-services-client";
 import * as core from "@fluidframework/server-services-core";
-import { validateTokenClaims, throttle, IThrottleMiddlewareOptions } from "@fluidframework/server-services-utils";
+import {
+    validateTokenClaims,
+    throttle,
+    IThrottleMiddlewareOptions,
+    getParam,
+} from "@fluidframework/server-services-utils";
 import { Request, Response, Router } from "express";
 import * as moniker from "moniker";
 import { Provider } from "nconf";
 import requestAPI from "request";
 import winston from "winston";
-import { getParam, Constants } from "../../../utils";
+import { Constants } from "../../../utils";
 import {
     craftClientJoinMessage,
     craftClientLeaveMessage,
@@ -167,9 +173,9 @@ async function verifyToken(request: Request, tenantManager: core.ITenantManager,
     }
     const tenantId = getParam(request.params, "tenantId");
     const documentId = getParam(request.params, "id");
-    const claims = validateTokenClaims(token, documentId, tenantId, maxTokenLifetimeSec, isTokenExpiryEnabled);
-    if (!claims) {
-        return Promise.reject(new Error("Invalid access token"));
+    const claims = validateTokenClaims(token, documentId, tenantId);
+    if (isTokenExpiryEnabled) {
+        validateTokenClaimsExpiration(claims, maxTokenLifetimeSec);
     }
     return tenantManager.verifyToken(claims.tenantId, token);
 }

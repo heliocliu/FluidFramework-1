@@ -21,7 +21,7 @@ import {
     SnapshotTreeEntry,
     SnapshotType,
     ICreateFileResponse,
-    ISnapshotRequest,
+    IOdspSummaryPayload,
 } from "./contracts";
 import { getUrlAndHeadersWithAuth } from "./getUrlAndHeadersWithAuth";
 import {
@@ -90,9 +90,11 @@ export async function createNewFluidFile(
                 }
                 event.end({
                     headers: Object.keys(headers).length !== 0 ? true : undefined,
+                    ...fetchResponse.commonSpoHeaders,
                 });
                 return content.itemId;
-            });
+            },
+            { cancel: "error" });
     });
 
     const odspUrl = createOdspUrl(newFileInfo.siteUrl, newFileInfo.driveId, itemId, "/");
@@ -120,7 +122,7 @@ function convertSummaryIntoContainerSnapshot(createNewSummary: ISummaryTree) {
         },
     };
     const snapshotTree = convertSummaryToSnapshotTreeForCreateNew(convertedCreateNewSummary);
-    const snapshot: ISnapshotRequest = {
+    const snapshot: IOdspSummaryPayload = {
         entries: snapshotTree.entries ?? [],
         message: "app",
         sequenceNumber: documentAttributes.sequenceNumber,

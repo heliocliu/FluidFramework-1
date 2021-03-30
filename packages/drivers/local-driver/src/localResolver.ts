@@ -43,7 +43,7 @@ export class LocalResolver implements IUrlResolver {
      */
     public async resolve(request: IRequest): Promise<IResolvedUrl> {
         const parsedUrl = new URL(request.url);
-        const fullPath = parsedUrl.pathname.substr(1);
+        const fullPath = `${parsedUrl.pathname.substr(1)}${parsedUrl.search}`;
         const documentId = fullPath.split("/")[0];
         const scopes = [ScopeType.DocRead, ScopeType.DocWrite, ScopeType.SummaryWrite];
         const resolved: IFluidResolvedUrl = {
@@ -72,7 +72,7 @@ export class LocalResolver implements IUrlResolver {
             throw new Error("Url should contain tenant and docId!!");
         }
         const [, , documentId] = parsedUrl.pathname.split("/");
-        assert(!!documentId, "The resolvedUrl must have a documentId");
+        assert(!!documentId, 0x09a /* "The resolvedUrl must have a documentId" */);
 
         return `http://localhost:3000/${documentId}/${url}`;
     }

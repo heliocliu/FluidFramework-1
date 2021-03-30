@@ -3,12 +3,9 @@
  * Licensed under the MIT License.
  */
 
-import { AssertionError } from "assert";
 import { inspect } from "util";
 import nconf from "nconf";
-import * as winston from "winston";
-import { NodeErrorTrackingService } from "./errorTrackingService";
-import { configureLogging } from "./logger";
+import { ILogger } from "@fluidframework/server-services-core";
 
 /**
  * A runner represents a task that starts once start is called. And ends when either start completes
@@ -18,7 +15,7 @@ export interface IRunner {
     /**
      * Starts the runner
      */
-    start(): Promise<void>;
+    start(logger: ILogger | undefined): Promise<void>;
 
     /**
      * Stops the runner
@@ -56,23 +53,29 @@ export interface IRunnerFactory<T> {
     create(resources: T): Promise<IRunner>;
 }
 
-interface IErrorTrackingConfig {
-    track: boolean;
-    endpoint: string;
-}
-
 /**
  * Uses the provided factories to create and execute a runner.
  */
 export async function run<T extends IResources>(
     config: nconf.Provider,
     resourceFactory: IResourcesFactory<T>,
-    runnerFactory: IRunnerFactory<T>) {
+    runnerFactory: IRunnerFactory<T>,
+    logger: ILogger | undefined) {
     const resources = await resourceFactory.create(config);
     const runner = await runnerFactory.create(resources);
 
     // Start the runner and then listen for the message to stop it
-    const runningP = runner.start();
+    const runningP = runner
+        .start(logger)
+        .catch(async (error) => {
+            await runner
+                    .stop()
+                    .catch((innerError) => {
+                        logger?.error(`Could not stop runner due to error: ${innerError}`);
+                    });
+            return Promise.reject(error);
+        });
+
     process.on("SIGTERM", () => {
         // eslint-disable-next-line @typescript-eslint/no-floating-promises
         runner.stop();
@@ -92,40 +95,22 @@ export async function run<T extends IResources>(
 export function runService<T extends IResources>(
     resourceFactory: IResourcesFactory<T>,
     runnerFactory: IRunnerFactory<T>,
+    logger: ILogger | undefined,
     group: string,
     configOrPath: nconf.Provider | string) {
     // eslint-disable-next-line max-len
     const config = typeof configOrPath === "string" ? nconf.argv().env({ separator: "__", parseValues: true }).file(configOrPath).use("memory") : configOrPath;
-    configureLogging(config.get("logger"));
 
-    const errorTrackingConfig = config.get("error") as IErrorTrackingConfig;
-    const runningP = run(config, resourceFactory, runnerFactory);
-    let errorTracker: NodeErrorTrackingService;
-    if (errorTrackingConfig.track) {
-        errorTracker = new NodeErrorTrackingService(errorTrackingConfig.endpoint, group);
-    }
+    const runningP = run(config, resourceFactory, runnerFactory, logger);
 
     runningP.then(
         () => {
-            winston.info("Exiting");
+            logger?.info("Exiting");
             process.exit(0);
         },
         (error) => {
-            winston.error(`${group} service exiting due to error`);
-            winston.error(inspect(error));
-            if (errorTracker === undefined) {
-                process.exit(1);
-            } else {
-                if (group === "scribe" && error.error && error.error instanceof AssertionError) {
-                    errorTracker.captureException(error);
-                } else {
-                    errorTracker.captureException(error);
-                    errorTracker.flush(10000).then(() => {
-                        process.exit(1);
-                    }, () => {
-                        process.exit(1);
-                    });
-                }
-            }
+            logger?.error(`${group} service exiting due to error`);
+            logger?.error(inspect(error));
+            process.exit(1);
         });
 }
