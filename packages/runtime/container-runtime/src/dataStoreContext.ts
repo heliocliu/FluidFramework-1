@@ -12,7 +12,6 @@ import {
 } from "@fluidframework/core-interfaces";
 import {
     IAudience,
-    IContainer,
     IDeltaManager,
     ContainerWarning,
     ILoader,
@@ -30,7 +29,6 @@ import { IDocumentStorageService } from "@fluidframework/driver-definitions";
 import { readAndParse } from "@fluidframework/driver-utils";
 import { BlobTreeEntry } from "@fluidframework/protocol-base";
 import {
-    IClientDetails,
     IDocumentMessage,
     IQuorum,
     ISequencedDocumentMessage,

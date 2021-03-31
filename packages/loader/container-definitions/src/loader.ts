@@ -240,18 +240,6 @@ export type ILoaderOptions = {
     cache?: boolean;
 
     /**
-     * Start the container in a paused, unconnected state.
-     * Defaults to false.
-     */
-    pause?: boolean;
-
-    /**
-     * Allow the container to reconnect.
-     * Defaults to true.
-     */
-    reconnect?: boolean;
-
-    /**
      * Provide the current Loader through the scope object when creating Containers.  It is added
      * as the `ILoader` property, and will overwrite an existing property of the same name on the
      * scope.  Useful for when the host wants to provide the current Loader's functionality to
@@ -294,12 +282,8 @@ export enum LoaderHeader {
 
     /**
      * Start the container in a paused, unconnected state. Defaults to false
-     * @deprecated 0.35 Provide a loader policy on creation instead
      */
     pause = "pause",
-    /**
-     * @deprecated 0.35 Use ILoaderOptions.reconnect instead
-     */
     reconnect = "fluid-reconnect",
     sequenceNumber = "fluid-sequence-number",
 
@@ -308,7 +292,7 @@ export enum LoaderHeader {
      * null or "null": use ops, no snapshots
      * undefined: fetch latest snapshot
      * otherwise, version sha to load snapshot
-     * @deprecated 0.35 Provide this value in the request URL instead
+     * @deprecated 0.38 Provide this value in the request URL instead
      */
     version = "version",
 }
