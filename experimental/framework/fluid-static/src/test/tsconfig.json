@@ -1,20 +1,15 @@
 {
     "extends": "@fluidframework/build-common/ts-common-config.json",
     "compilerOptions": {
-        "module": "esnext",
-        "rootDir": "./src",
-        "outDir": "./dist",
+        "rootDir": "./",
+        "outDir": "../../dist/test",
         "composite": true,
         "types": [
+            "mocha",
             "node"
         ]
     },
     "include": [
-        "src/**/*"
-    ],
-    "exclude": [
-        "dist",
-        "node_modules",
-        "src/test/**/*"
+        "./**/*",
     ]
 }
