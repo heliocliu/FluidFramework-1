@@ -13,10 +13,12 @@ import { assert } from "@fluidframework/common-utils";
 import { Jsonable } from "@fluidframework/datastore-definitions";
 import { IInboundSignalMessage } from "@fluidframework/runtime-definitions";
 
-// TODO:
-// add way to mark with current sequence number for ordering signals relative to ops
-// async listener support
-
+/**
+ * The callback type for a signal listener.
+ * @param clientId - The clientId of the sender of the signal
+ * @param local - If this is a signal originating from the local client
+ * @param payload - The client-provided data that comes with the signal
+ */
 export type SignalListener = (clientId: string, local: boolean, payload: Jsonable) => void;
 
 export interface ISignalManager {
@@ -42,17 +44,47 @@ export interface ISignalManager {
      */
     deregisterListener(signalName: string, listener: SignalListener): ISignalManager;
 
-    submitSignal(signalName: string, payload?: Jsonable);
+    /**
+     * Submit a signal through the IFluidDataStoreRuntime.
+     * @param signalName - The name of the signal
+     * @param payload - Any data to send along with the signal
+     */
+    submitSignal(signalName: string, payload?: Jsonable): void;
 
+    /**
+     * Adds a listener for broadcast requests of the specified signal.  Otherwise follows rules of
+     * `registerListener`.  Broadcast listeners should usually be used when clients with stale data
+     * or newly connected clients do not want to wait the full natural cadence of a signal.
+     * @param signalName - The name of the signal
+     * @param listener - The callback signal handler
+     * @returns This ISignalManager
+     */
     registerBroadcastListener(signalName: string, listener: SignalListener): ISignalManager;
 
+    /**
+     * Removes a listener for broadcast requests of the specified signal.  Otherwise follows rules
+     * of `deregisterListener`.
+     * @param signalName - The name of the signal
+     * @param listener - The callback signal handler
+     * @returns This ISignalManager
+     */
     deregisterBroadcastListener(signalName: string, listener: SignalListener): ISignalManager;
 
-    requestBroadcast(signalName: string, payload?: Jsonable);
+    /**
+     * Submits a request for broadcast of the specified signal from all other connected clients.
+     *
+     * @param signalName - The name of the signal
+     * @param listener - The callback signal handler
+     */
+    requestBroadcast(signalName: string, payload?: Jsonable): void;
 }
 
 /**
+ * A helper class to assist with using signals to transmit transient data among clients.
  *
+ * TODO:
+ * add way to mark with current sequence number for ordering signals relative to ops
+ * async listener support
  */
 // eslint-disable-next-line @typescript-eslint/ban-types
 export class SignalManager extends DataObject<{}, undefined, IErrorEvent> implements EventEmitter, ISignalManager {
@@ -121,7 +153,7 @@ export class SignalManager extends DataObject<{}, undefined, IErrorEvent> implem
         let listenerList = this.listenerMap.get(managerSignalName);
         if (listenerList === undefined) {
             listenerList = [];
-            this.listenerMap.set(signalName, listenerList);
+            this.listenerMap.set(managerSignalName, listenerList);
         }
         listenerList.push(listener);
         return this;
